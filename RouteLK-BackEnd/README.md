@@ -185,3 +185,9 @@ When booking via `POST /api/bookings`:
 - `GET /api/users/:id` - Get single user (Admin only)
 - `DELETE /api/users/:id` - Delete a user (Admin only)
 - `GET /api/admin/statistics` - Platform overview stats (Admin only)
+
+# 1. Commit the staged Google Pay files with your account
+git commit -m "feat: add Google Pay payment gateway for wallet top-up"
+
+# 2. Push directly to GitHub
+git push origin main

@@ -451,4 +451,44 @@ export async function confirmPayHereTopUpApi(
   return data;
 }
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  source?: string;
+}
+
+export interface ChatApiResponse {
+  success: boolean;
+  reply: string;
+  source?: string;
+  message?: string;
+}
+
+export async function sendChatMessageApi(
+  message: string,
+  history: { role: 'user' | 'assistant'; content: string }[] = [],
+  token?: string | null
+): Promise<ChatApiResponse> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}/chat`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ message, history }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || 'Failed to get response from AI assistant.');
+  }
+  return data;
+}
+
 

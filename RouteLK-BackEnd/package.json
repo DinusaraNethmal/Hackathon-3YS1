@@ -7,10 +7,11 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "seed": "node seed/seedData.js",
-    "test": "node tests/bookingApi.test.js && node tests/walletApi.test.js && node tests/payhere.test.js",
+    "test": "node tests/bookingApi.test.js && node tests/walletApi.test.js && node tests/payhere.test.js && node tests/chatApi.test.js",
     "test:booking": "node tests/bookingApi.test.js",
     "test:wallet": "node tests/walletApi.test.js",
-    "test:payhere": "node tests/payhere.test.js"
+    "test:payhere": "node tests/payhere.test.js",
+    "test:chat": "node tests/chatApi.test.js"
   },
   "repository": {
     "type": "git",

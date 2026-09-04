@@ -206,21 +206,34 @@ export const SeatBookingModal: React.FC<SeatBookingModalProps> = ({
       >
         {/* Header */}
         <div className="modal-header">
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <span className="bus-type-tag" style={{ margin: 0 }}>
-                {bus.busType}
-              </span>
-              <strong style={{ fontSize: '17px', color: '#0d1926' }}>{bus.operatorName}</strong>
-              <span style={{ fontSize: '13px', color: '#64748b' }}>({bus.busNumber})</span>
+          <div className="modal-route-header">
+            <div className="modal-route-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00A86B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="14" rx="2" />
+                <path d="M8 4v14M16 4v14M2 8h20" />
+                <circle cx="7" cy="20" r="1.5" fill="#00A86B" stroke="none" />
+                <circle cx="17" cy="20" r="1.5" fill="#00A86B" stroke="none" />
+              </svg>
             </div>
-            <p className="modal-route-sub" style={{ margin: 0 }}>
-              <span>{bus.from}</span> <span style={{ color: '#059669' }}>→</span> <span>{bus.to}</span> • Travel Date:{' '}
-              <strong style={{ color: '#0f172a' }}>{travelDate}</strong> ({bus.departureTime} - {bus.arrivalTime})
-            </p>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <span className={`bus-type-tag ${bus.busType === 'AC' ? 'ac' : 'non-ac'}`} style={{ margin: 0 }}>
+                  {bus.busType === 'AC' ? '❄ AC' : 'Non-AC'}
+                </span>
+                <strong style={{ fontSize: '17px', color: 'var(--white)' }}>{bus.operatorName}</strong>
+                <span style={{ fontSize: '12px', color: 'var(--navy-200)', fontFamily: 'var(--font-mono)' }}>#{bus.busNumber}</span>
+              </div>
+              <p className="modal-route-sub" style={{ margin: 0 }}>
+                <span>{bus.from}</span> <span style={{ color: 'var(--emerald-400)' }}>→</span> <span>{bus.to}</span> • Travel Date:{' '}
+                <strong style={{ color: 'var(--white)' }}>{travelDate}</strong> ({bus.departureTime} – {bus.arrivalTime})
+              </p>
+            </div>
           </div>
           <button type="button" className="modal-close-btn" onClick={onClose} title="Close">
-            ✕
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
 
@@ -332,13 +345,22 @@ export const SeatBookingModal: React.FC<SeatBookingModalProps> = ({
                   {/* Bus Front Section */}
                   <div className="bus-cabin-front">
                     <div className="bus-entry-indicator">
-                      🚪 Entrance Door
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 20V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14" />
+                        <path d="M2 20h20" />
+                        <circle cx="14" cy="12" r="1" fill="currentColor" />
+                      </svg>
+                      <span>Entry Door</span>
                     </div>
                     <div className="bus-driver-indicator">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      {/* Steering wheel */}
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10" />
-                        <path d="M12 2v20" />
-                        <path d="M2 12h20" />
+                        <circle cx="12" cy="12" r="3" />
+                        <line x1="12" y1="2" x2="12" y2="5" />
+                        <line x1="12" y1="19" x2="12" y2="22" />
+                        <line x1="2" y1="12" x2="5" y2="12" />
+                        <line x1="19" y1="12" x2="22" y2="12" />
                       </svg>
                       <span>Driver</span>
                     </div>
@@ -424,15 +446,15 @@ export const SeatBookingModal: React.FC<SeatBookingModalProps> = ({
                   {/* Legend */}
                   <div className="seat-legend-bar">
                     <div className="legend-item">
-                      <div className="legend-swatch" style={{ background: '#ffffff', border: '1.5px solid #94a3b8' }} />
+                      <div className="legend-swatch" style={{ background: 'var(--white)', border: '1.5px solid var(--gray-300)' }} />
                       <span>Available</span>
                     </div>
                     <div className="legend-item">
-                      <div className="legend-swatch" style={{ background: '#059669' }} />
+                      <div className="legend-swatch" style={{ background: 'var(--emerald-500)', border: '1.5px solid var(--emerald-600)' }} />
                       <span>Selected</span>
                     </div>
                     <div className="legend-item">
-                      <div className="legend-swatch" style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0' }} />
+                      <div className="legend-swatch" style={{ background: 'var(--gray-100)', border: '1.5px solid var(--gray-200)' }} />
                       <span>Booked</span>
                     </div>
                   </div>

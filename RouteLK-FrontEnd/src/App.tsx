@@ -7,6 +7,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { UserDashboard } from './components/UserDashboard';
 import { HeroSearch } from './components/HeroSearch';
 import { Footer } from './components/Footer';
+import { ChatBotWidget } from './components/ChatBotWidget';
 import './App.css';
 
 type ViewMode = 'home' | 'login' | 'register' | 'admin' | 'user-dashboard';
@@ -66,6 +67,10 @@ function AppContent() {
       </main>
 
       <Footer />
+
+      {(!isAuthenticated || user?.role !== 'admin') && activeView !== 'admin' && (
+        <ChatBotWidget />
+      )}
     </div>
   );
 }
