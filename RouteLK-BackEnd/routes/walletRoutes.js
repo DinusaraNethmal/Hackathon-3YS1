@@ -26,7 +26,7 @@ const topUpValidation = [
     .withMessage('Top-up amount must be between Rs. 100 and Rs. 50,000 LKR'),
   body('paymentMethod')
     .optional()
-    .isIn(['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'PAYHERE', 'OTHER', 'card', 'lankapay', 'ezcash', 'genie', 'payhere'])
+    .isIn(['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'PAYHERE', 'GOOGLE_PAY', 'OTHER', 'card', 'lankapay', 'ezcash', 'genie', 'payhere', 'google_pay'])
     .withMessage('Invalid payment method selected'),
 ];
 
@@ -34,7 +34,7 @@ router.get('/', getWalletDetails);
 router.post('/topup', topUpValidation, topUpWallet);
 router.post('/pay', payWithWallet);
 
-// PayHere Integration Endpoints
+
 router.post('/payhere-init', initPayHereTopUp);
 router.post('/payhere-confirm', confirmPayHereTopUp);
 

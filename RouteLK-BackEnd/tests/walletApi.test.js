@@ -78,13 +78,14 @@ runTest('Transaction ID should adhere to TXN-WLT-XXXXX pattern', () => {
 
 // Test 5: Supported Payment Methods
 runTest('Payment method should match accepted Sri Lankan providers', () => {
-  const acceptedMethods = new Set(['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'WALLET', 'OTHER']);
+  const acceptedMethods = new Set(['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'WALLET', 'PAYHERE', 'GOOGLE_PAY', 'OTHER']);
 
   assert.ok(acceptedMethods.has('CARD'));
   assert.ok(acceptedMethods.has('LANKAPAY'));
   assert.ok(acceptedMethods.has('EZCASH'));
   assert.ok(acceptedMethods.has('GENIE'));
   assert.ok(acceptedMethods.has('WALLET'));
+  assert.ok(acceptedMethods.has('GOOGLE_PAY'));
   assert.ok(!acceptedMethods.has('BITCOIN'));
 });
 

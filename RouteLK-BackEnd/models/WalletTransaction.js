@@ -41,7 +41,7 @@ const walletTransactionSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'WALLET', 'PAYHERE', 'OTHER'],
+      enum: ['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'WALLET', 'PAYHERE', 'GOOGLE_PAY', 'OTHER'],
       default: 'CARD',
     },
     reference: {

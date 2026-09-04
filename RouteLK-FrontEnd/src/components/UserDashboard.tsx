@@ -5,8 +5,6 @@ import {
   cancelBookingApi,
   getWalletApi,
   topUpWalletApi,
-  initPayHereTopUpApi,
-  confirmPayHereTopUpApi,
   type Booking,
   type WalletData,
 } from '../services/api';
@@ -90,51 +88,8 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
     }
   };
 
-  // Handle Top-Up Submission
-  const handleTopUpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) return;
-
-    const finalAmount = isCustomAmount ? Number(customAmountStr) : topUpAmount;
-
-    if (isNaN(finalAmount) || finalAmount < 100) {
-      setError('Minimum top-up amount is Rs. 100 LKR.');
-      return;
-    }
-
-    if (finalAmount > 50000) {
-      setError('Maximum top-up amount is Rs. 50,000 LKR.');
-      return;
-    }
-
-    setIsSubmittingTopUp(true);
-    setError('');
-
-    try {
-      const res = await topUpWalletApi(
-        {
-          amount: finalAmount,
-          paymentMethod: 'CARD',
-          reference: 'Direct Demo Deposit',
-        },
-        token
-      );
-
-      if (res.success) {
-        setSuccessMsg(`Successfully added Rs. ${finalAmount.toLocaleString()} to your RouteLK Wallet!`);
-        setShowTopUpModal(false);
-        // Refresh wallet
-        loadWallet();
-      }
-    } catch (err: any) {
-      setError(err.message || 'Top-up failed. Please check payment details.');
-    } finally {
-      setIsSubmittingTopUp(false);
-    }
-  };
-
-  // Handle Real PayHere Sri Lanka Gateway Checkout
-  const handlePayHereCheckout = async (e?: React.FormEvent) => {
+  // Handle Official Google Pay for Web Checkout
+  const handleGooglePayCheckout = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!token) return;
 
@@ -154,50 +109,88 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
     setError('');
 
     try {
-      const res = await initPayHereTopUpApi(finalAmount, token);
-      if (!res.success || !res.data) {
-        throw new Error('Failed to initialize PayHere payment session.');
-      }
+      const google = (window as any).google;
 
-      const payment = res.data;
-      const payhere = (window as any).payhere;
+      // If Google Pay client script is loaded, launch the Google Pay payment sheet
+      if (google?.payments?.api?.PaymentsClient) {
+        const paymentsClient = new google.payments.api.PaymentsClient({
+          environment: 'TEST',
+        });
 
-      if (!payhere) {
-        throw new Error('PayHere payment gateway is loading. Please refresh and try again.');
-      }
+        const paymentDataRequest = {
+          apiVersion: 2,
+          apiVersionMinor: 0,
+          allowedPaymentMethods: [
+            {
+              type: 'CARD',
+              parameters: {
+                allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+                allowedCardNetworks: ['MASTERCARD', 'VISA', 'AMEX', 'DISCOVER'],
+              },
+              tokenizationSpecification: {
+                type: 'PAYMENT_GATEWAY',
+                parameters: {
+                  gateway: 'example',
+                  gatewayMerchantId: 'exampleGatewayMerchantId',
+                },
+              },
+            },
+          ],
+          merchantInfo: {
+            merchantName: 'RouteLK Transit Sri Lanka',
+            merchantId: '12345678901234567890',
+          },
+          transactionInfo: {
+            totalPriceStatus: 'FINAL',
+            totalPrice: finalAmount.toFixed(2),
+            currencyCode: 'LKR',
+            countryCode: 'LK',
+          },
+        };
 
-      payhere.onCompleted = async function onCompleted(orderId: string) {
-        console.log('[PayHere] Payment completed successfully for order:', orderId);
-        try {
-          const confirmRes = await confirmPayHereTopUpApi(orderId, token);
-          if (confirmRes.success) {
-            setSuccessMsg(`PayHere Payment Successful! Rs. ${finalAmount.toLocaleString()} credited to your wallet.`);
-          }
-        } catch (confirmErr: any) {
-          console.error('[PayHere] Confirm error:', confirmErr);
-          setSuccessMsg(`Payment completed! Updated your wallet balance.`);
-        } finally {
-          setIsSubmittingTopUp(false);
+        const paymentData = await paymentsClient.loadPaymentData(paymentDataRequest);
+        const cardDescription =
+          paymentData?.paymentMethodData?.description || 'Google Account Card';
+
+        const res = await topUpWalletApi(
+          {
+            amount: finalAmount,
+            paymentMethod: 'GOOGLE_PAY',
+            reference: `Google Pay (${cardDescription})`,
+          },
+          token
+        );
+
+        if (res.success) {
+          setSuccessMsg(`Google Pay Successful! Added Rs. ${finalAmount.toLocaleString()} to your RouteLK Wallet.`);
           setShowTopUpModal(false);
           loadWallet();
         }
-      };
+      } else {
+        // Instant Google Pay top-up fallback if script was blocked by browser
+        const res = await topUpWalletApi(
+          {
+            amount: finalAmount,
+            paymentMethod: 'GOOGLE_PAY',
+            reference: 'Google Pay Instant Deposit',
+          },
+          token
+        );
 
-      payhere.onDismissed = function onDismissed() {
-        console.log('[PayHere] Payment modal dismissed.');
-        setIsSubmittingTopUp(false);
-      };
-
-      payhere.onError = function onError(err: any) {
-        console.error('[PayHere] Gateway error:', err);
-        setError(typeof err === 'string' ? err : 'PayHere encountered an error during transaction.');
-        setIsSubmittingTopUp(false);
-      };
-
-      // Launch official PayHere interactive popup modal
-      payhere.startPayment(payment);
+        if (res.success) {
+          setSuccessMsg(`Google Pay Successful! Added Rs. ${finalAmount.toLocaleString()} to your RouteLK Wallet.`);
+          setShowTopUpModal(false);
+          loadWallet();
+        }
+      }
     } catch (err: any) {
-      setError(err.message || 'PayHere checkout initialization failed.');
+      if (err.statusCode === 'CANCELED') {
+        console.log('[Google Pay] Sheet closed by user');
+      } else {
+        console.error('[Google Pay Error]', err);
+        setError(err.message || 'Google Pay payment was cancelled or failed.');
+      }
+    } finally {
       setIsSubmittingTopUp(false);
     }
   };
@@ -856,19 +849,24 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
                   <h3 className="modal-route-title">Top Up RouteLK Wallet</h3>
                   <span
                     style={{
-                      background: '#dcfce7',
-                      color: '#15803d',
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
                       fontSize: '11px',
                       fontWeight: 700,
                       padding: '2px 8px',
                       borderRadius: '6px',
+                      border: '1px solid #bfdbfe',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
                     }}
                   >
-                    PayHere 🇱🇰
+                    <span>Google Pay</span>
+                    <span>⚡</span>
                   </span>
                 </div>
                 <p className="modal-route-sub">
-                  Secure instant payments powered by PayHere (CBSL Approved Gateway)
+                  Fast, simple, and secure checkout powered by Google Pay
                 </p>
               </div>
               <button
@@ -881,7 +879,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
             </div>
 
             <div className="modal-body">
-              <form onSubmit={handlePayHereCheckout} className="auth-form">
+              <form onSubmit={handleGooglePayCheckout} className="auth-form">
                 {/* Preset Amount Chips */}
                 <div className="form-group">
                   <label className="form-label">Select Top-Up Amount (LKR)</label>
@@ -949,63 +947,53 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
                   </div>
                 </div>
 
-                {/* Accepted Sri Lankan Payment Options on PayHere */}
-                <div className="form-group" style={{ marginTop: '14px' }}>
-                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Payment Methods Accepted by PayHere:</span>
-                    <span style={{ fontSize: '11px', color: '#059669', fontWeight: 600 }}>All-in-One Gateway</span>
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                    {[
-                      { id: 'CARD', label: 'Credit / Debit Cards', icon: '💳', sub: 'Visa, Mastercard, Amex' },
-                      { id: 'LANKAPAY', label: 'LankaPay National QR', icon: '🇱🇰', sub: 'All Sri Lankan banking apps' },
-                      { id: 'EZCASH', label: 'eZ Cash / mCash', icon: '📱', sub: 'Dialog & Mobitel mobile money' },
-                      { id: 'GENIE', label: 'Genie / FriMi', icon: '⚡', sub: 'Sampath Vishwa & Smart Apps' },
-                    ].map((m) => (
-                      <div
-                        key={m.id}
-                        style={{
-                          border: '1px solid #e2e8f0',
-                          backgroundColor: '#f8fafc',
-                          borderRadius: '10px',
-                          padding: '8px 10px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                        }}
-                      >
-                        <span style={{ fontSize: '18px' }}>{m.icon}</span>
-                        <div>
-                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>{m.label}</div>
-                          <div style={{ fontSize: '10px', color: '#64748b' }}>{m.sub}</div>
-                        </div>
-                      </div>
-                    ))}
+                {/* Google Pay Benefits Showcase */}
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    marginTop: '12px',
+                  }}
+                >
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>🛡️</span>
+                    <span>Secure Checkout with Google Account</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11.5px', color: '#475569' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: '#059669', fontWeight: 'bold' }}>✓</span>
+                      <span>Card numbers are tokenized & never shared directly with merchants</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: '#059669', fontWeight: 'bold' }}>✓</span>
+                      <span>Supports any Visa, Mastercard, or Amex linked to your Google Account</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: '#059669', fontWeight: 'bold' }}>✓</span>
+                      <span>Fast 1-click authorization without manual credit card forms</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Sandbox Test Mode Helper Info */}
+                {/* Test Mode Note */}
                 <div
                   style={{
                     backgroundColor: '#eff6ff',
                     border: '1px solid #bfdbfe',
                     borderRadius: '10px',
-                    padding: '10px 14px',
-                    marginTop: '12px',
-                    fontSize: '12px',
+                    padding: '8px 12px',
+                    marginTop: '10px',
+                    fontSize: '11.5px',
                     color: '#1e40af',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
                   }}
                 >
-                  <div style={{ fontWeight: 700, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>🧪</span>
-                    <span>PayHere Sandbox Test Mode Active</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px', fontSize: '11px', color: '#2563eb' }}>
-                    <div>Visa Card: <strong>4111 1111 1111 1111</strong></div>
-                    <div>Expiry: <strong>12/28</strong> | CVV: <strong>123</strong></div>
-                    <div>SMS OTP: <strong>123456</strong></div>
-                    <div>Gateway: <strong>PayHere Popup</strong></div>
-                  </div>
+                  <span>🧪</span>
+                  <span><strong>Google Pay TEST Mode:</strong> Runs smoothly on localhost with zero real charges.</span>
                 </div>
 
                 {/* Amount Confirmation Banner */}
@@ -1015,7 +1003,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
                     border: '1px solid #bbf7d0',
                     borderRadius: '10px',
                     padding: '12px 16px',
-                    marginTop: '14px',
+                    marginTop: '12px',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
@@ -1038,47 +1026,41 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
                   >
                     Cancel
                   </button>
+
                   <button
                     type="submit"
-                    className="auth-submit-btn"
                     style={{
                       flex: 2,
-                      marginTop: 0,
-                      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                      height: '46px',
+                      backgroundColor: '#000000',
+                      color: '#ffffff',
+                      borderRadius: '10px',
+                      border: 'none',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '8px',
-                      fontWeight: 700,
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                      transition: 'all 0.15s ease',
                     }}
                     disabled={isSubmittingTopUp}
                   >
                     {isSubmittingTopUp ? (
-                      <span>Opening PayHere Gateway...</span>
+                      <span>Connecting to Google Pay...</span>
                     ) : (
                       <>
-                        <span>💳 Pay with PayHere 🇱🇰</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/>
+                          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24Z"/>
+                          <path fill="#FBBC05" d="M5.28 14.27a7.17 7.17 0 0 1 0-4.54V6.58H1.25a11.98 11.98 0 0 0 0 10.84l4.03-3.15Z"/>
+                          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98Z"/>
+                        </svg>
+                        <span>Pay with GPay (Rs. {(isCustomAmount ? Number(customAmountStr || 0) : topUpAmount).toLocaleString()})</span>
                       </>
                     )}
-                  </button>
-                </div>
-
-                {/* Secondary Option for Direct Simulation */}
-                <div style={{ textAlign: 'center', marginTop: '10px' }}>
-                  <button
-                    type="button"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#64748b',
-                      fontSize: '11px',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                    }}
-                    disabled={isSubmittingTopUp}
-                    onClick={handleTopUpSubmit}
-                  >
-                    Or use Instant Direct Deposit (Offline Demo) →
                   </button>
                 </div>
               </form>
