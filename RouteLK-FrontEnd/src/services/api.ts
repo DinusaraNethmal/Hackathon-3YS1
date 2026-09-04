@@ -106,7 +106,12 @@ export async function loginApi(email: string, password: string): Promise<AuthRes
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  const data = await res.json();
+  let data: any = {};
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Server returned error status ${res.status}. Please ensure backend is running.`);
+  }
   if (!res.ok) {
     throw new Error(data.message || 'Login failed. Please check your credentials.');
   }
@@ -124,7 +129,12 @@ export async function registerApi(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password, phone }),
   });
-  const data = await res.json();
+  let data: any = {};
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Server returned error status ${res.status}. Please ensure backend is running.`);
+  }
   if (!res.ok) {
     throw new Error(data.message || 'Registration failed.');
   }
