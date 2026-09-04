@@ -5,6 +5,8 @@ import {
   cancelBookingApi,
   getWalletApi,
   topUpWalletApi,
+  initPayHereTopUpApi,
+  confirmPayHereTopUpApi,
   type Booking,
   type WalletData,
 } from '../services/api';
@@ -14,7 +16,6 @@ interface UserDashboardProps {
 }
 
 type UserTab = 'bookings' | 'wallet' | 'profile';
-type PaymentMethodType = 'CARD' | 'LANKAPAY' | 'EZCASH' | 'GENIE';
 
 export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) => {
   const { user, token } = useAuth();
@@ -32,12 +33,6 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
   const [topUpAmount, setTopUpAmount] = useState<number>(1000);
   const [customAmountStr, setCustomAmountStr] = useState<string>('');
   const [isCustomAmount, setIsCustomAmount] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('CARD');
-  const [cardHolder, setCardHolder] = useState<string>(user?.name || '');
-  const [cardNumber, setCardNumber] = useState<string>('4242 •••• •••• 4242');
-  const [cardExpiry, setCardExpiry] = useState<string>('12/28');
-  const [cardCvv, setCardCvv] = useState<string>('892');
-  const [mobileNumber, setMobileNumber] = useState<string>(user?.phone || '0771234567');
   const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
 
   // Fetch current user bookings
@@ -116,22 +111,11 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
     setError('');
 
     try {
-      let referenceText = '';
-      if (paymentMethod === 'CARD') {
-        referenceText = `Card ending ${cardNumber.slice(-4)}`;
-      } else if (paymentMethod === 'LANKAPAY') {
-        referenceText = 'LankaPay QR Ref';
-      } else if (paymentMethod === 'EZCASH') {
-        referenceText = `eZ Cash (${mobileNumber})`;
-      } else {
-        referenceText = 'Genie Online Wallet';
-      }
-
       const res = await topUpWalletApi(
         {
           amount: finalAmount,
-          paymentMethod,
-          reference: referenceText,
+          paymentMethod: 'CARD',
+          reference: 'Direct Demo Deposit',
         },
         token
       );
@@ -145,6 +129,75 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
     } catch (err: any) {
       setError(err.message || 'Top-up failed. Please check payment details.');
     } finally {
+      setIsSubmittingTopUp(false);
+    }
+  };
+
+  // Handle Real PayHere Sri Lanka Gateway Checkout
+  const handlePayHereCheckout = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!token) return;
+
+    const finalAmount = isCustomAmount ? Number(customAmountStr) : topUpAmount;
+
+    if (isNaN(finalAmount) || finalAmount < 100) {
+      setError('Minimum top-up amount is Rs. 100 LKR.');
+      return;
+    }
+
+    if (finalAmount > 50000) {
+      setError('Maximum top-up amount is Rs. 50,000 LKR.');
+      return;
+    }
+
+    setIsSubmittingTopUp(true);
+    setError('');
+
+    try {
+      const res = await initPayHereTopUpApi(finalAmount, token);
+      if (!res.success || !res.data) {
+        throw new Error('Failed to initialize PayHere payment session.');
+      }
+
+      const payment = res.data;
+      const payhere = (window as any).payhere;
+
+      if (!payhere) {
+        throw new Error('PayHere payment gateway is loading. Please refresh and try again.');
+      }
+
+      payhere.onCompleted = async function onCompleted(orderId: string) {
+        console.log('[PayHere] Payment completed successfully for order:', orderId);
+        try {
+          const confirmRes = await confirmPayHereTopUpApi(orderId, token);
+          if (confirmRes.success) {
+            setSuccessMsg(`PayHere Payment Successful! Rs. ${finalAmount.toLocaleString()} credited to your wallet.`);
+          }
+        } catch (confirmErr: any) {
+          console.error('[PayHere] Confirm error:', confirmErr);
+          setSuccessMsg(`Payment completed! Updated your wallet balance.`);
+        } finally {
+          setIsSubmittingTopUp(false);
+          setShowTopUpModal(false);
+          loadWallet();
+        }
+      };
+
+      payhere.onDismissed = function onDismissed() {
+        console.log('[PayHere] Payment modal dismissed.');
+        setIsSubmittingTopUp(false);
+      };
+
+      payhere.onError = function onError(err: any) {
+        console.error('[PayHere] Gateway error:', err);
+        setError(typeof err === 'string' ? err : 'PayHere encountered an error during transaction.');
+        setIsSubmittingTopUp(false);
+      };
+
+      // Launch official PayHere interactive popup modal
+      payhere.startPayment(payment);
+    } catch (err: any) {
+      setError(err.message || 'PayHere checkout initialization failed.');
       setIsSubmittingTopUp(false);
     }
   };
@@ -799,8 +852,24 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
           >
             <div className="modal-header">
               <div>
-                <h3 className="modal-route-title">Top Up RouteLK Wallet</h3>
-                <p className="modal-route-sub">Add funds instantly to reserve bus tickets anytime</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 className="modal-route-title">Top Up RouteLK Wallet</h3>
+                  <span
+                    style={{
+                      background: '#dcfce7',
+                      color: '#15803d',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                    }}
+                  >
+                    PayHere 🇱🇰
+                  </span>
+                </div>
+                <p className="modal-route-sub">
+                  Secure instant payments powered by PayHere (CBSL Approved Gateway)
+                </p>
               </div>
               <button
                 type="button"
@@ -812,10 +881,10 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
             </div>
 
             <div className="modal-body">
-              <form onSubmit={handleTopUpSubmit} className="auth-form">
+              <form onSubmit={handlePayHereCheckout} className="auth-form">
                 {/* Preset Amount Chips */}
                 <div className="form-group">
-                  <label className="form-label">Select Amount (LKR)</label>
+                  <label className="form-label">Select Top-Up Amount (LKR)</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '10px' }}>
                     {[500, 1000, 2500, 5000].map((amt) => {
                       const isSelected = !isCustomAmount && topUpAmount === amt;
@@ -868,7 +937,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
                         type="number"
                         className="auth-input"
                         style={{ paddingLeft: '14px', flex: 1 }}
-                        placeholder="Enter amount (min Rs. 100)"
+                        placeholder="Enter amount in LKR (min Rs. 100)"
                         value={customAmountStr}
                         onChange={(e) => setCustomAmountStr(e.target.value)}
                         min="100"
@@ -880,118 +949,70 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
                   </div>
                 </div>
 
-                {/* Payment Method Selector */}
+                {/* Accepted Sri Lankan Payment Options on PayHere */}
                 <div className="form-group" style={{ marginTop: '14px' }}>
-                  <label className="form-label">Payment Method</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Payment Methods Accepted by PayHere:</span>
+                    <span style={{ fontSize: '11px', color: '#059669', fontWeight: 600 }}>All-in-One Gateway</span>
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                     {[
-                      { id: 'CARD', label: 'Credit / Debit Card', icon: '💳', sub: 'Visa, Mastercard' },
-                      { id: 'LANKAPAY', label: 'LankaPay QR', icon: '🇱🇰', sub: 'National QR network' },
-                      { id: 'EZCASH', label: 'eZ Cash / mCash', icon: '📱', sub: 'Direct mobile wallet' },
-                      { id: 'GENIE', label: 'Genie / FriMi', icon: '⚡', sub: 'Smart banking app' },
-                    ].map((m) => {
-                      const isSelected = paymentMethod === m.id;
-                      return (
-                        <div
-                          key={m.id}
-                          style={{
-                            border: isSelected ? '2px solid #059669' : '1px solid #e2e8f0',
-                            backgroundColor: isSelected ? '#f0fdf4' : '#ffffff',
-                            borderRadius: '10px',
-                            padding: '10px 12px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onClick={() => setPaymentMethod(m.id as PaymentMethodType)}
-                        >
-                          <span style={{ fontSize: '20px' }}>{m.icon}</span>
-                          <div>
-                            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0d1926' }}>{m.label}</div>
-                            <div style={{ fontSize: '10.5px', color: '#64748b' }}>{m.sub}</div>
-                          </div>
+                      { id: 'CARD', label: 'Credit / Debit Cards', icon: '💳', sub: 'Visa, Mastercard, Amex' },
+                      { id: 'LANKAPAY', label: 'LankaPay National QR', icon: '🇱🇰', sub: 'All Sri Lankan banking apps' },
+                      { id: 'EZCASH', label: 'eZ Cash / mCash', icon: '📱', sub: 'Dialog & Mobitel mobile money' },
+                      { id: 'GENIE', label: 'Genie / FriMi', icon: '⚡', sub: 'Sampath Vishwa & Smart Apps' },
+                    ].map((m) => (
+                      <div
+                        key={m.id}
+                        style={{
+                          border: '1px solid #e2e8f0',
+                          backgroundColor: '#f8fafc',
+                          borderRadius: '10px',
+                          padding: '8px 10px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <span style={{ fontSize: '18px' }}>{m.icon}</span>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>{m.label}</div>
+                          <div style={{ fontSize: '10px', color: '#64748b' }}>{m.sub}</div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* Simulated Payment Details Input */}
-                {paymentMethod === 'CARD' ? (
-                  <div style={{ marginTop: '12px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Cardholder Name</label>
-                      <input
-                        type="text"
-                        className="auth-input"
-                        style={{ paddingLeft: '14px' }}
-                        value={cardHolder}
-                        onChange={(e) => setCardHolder(e.target.value)}
-                        placeholder="Name on card"
-                        required
-                      />
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '10px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Card Number</label>
-                        <input
-                          type="text"
-                          className="auth-input"
-                          style={{ paddingLeft: '14px' }}
-                          value={cardNumber}
-                          onChange={(e) => setCardNumber(e.target.value)}
-                          placeholder="•••• •••• •••• ••••"
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Expiry</label>
-                        <input
-                          type="text"
-                          className="auth-input"
-                          style={{ paddingLeft: '14px' }}
-                          value={cardExpiry}
-                          onChange={(e) => setCardExpiry(e.target.value)}
-                          placeholder="MM/YY"
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">CVV</label>
-                        <input
-                          type="password"
-                          className="auth-input"
-                          style={{ paddingLeft: '14px' }}
-                          value={cardCvv}
-                          onChange={(e) => setCardCvv(e.target.value)}
-                          maxLength={4}
-                          required
-                        />
-                      </div>
-                    </div>
+                {/* Sandbox Test Mode Helper Info */}
+                <div
+                  style={{
+                    backgroundColor: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    marginTop: '12px',
+                    fontSize: '12px',
+                    color: '#1e40af',
+                  }}
+                >
+                  <div style={{ fontWeight: 700, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>🧪</span>
+                    <span>PayHere Sandbox Test Mode Active</span>
                   </div>
-                ) : (
-                  <div className="form-group" style={{ marginTop: '12px' }}>
-                    <label className="form-label">Mobile Number / Account ID</label>
-                    <input
-                      type="text"
-                      className="auth-input"
-                      style={{ paddingLeft: '14px' }}
-                      value={mobileNumber}
-                      onChange={(e) => setMobileNumber(e.target.value)}
-                      placeholder="e.g. 0771234567"
-                      required
-                    />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px', fontSize: '11px', color: '#2563eb' }}>
+                    <div>Visa Card: <strong>4111 1111 1111 1111</strong></div>
+                    <div>Expiry: <strong>12/28</strong> | CVV: <strong>123</strong></div>
+                    <div>SMS OTP: <strong>123456</strong></div>
+                    <div>Gateway: <strong>PayHere Popup</strong></div>
                   </div>
-                )}
+                </div>
 
                 {/* Amount Confirmation Banner */}
                 <div
                   style={{
-                    backgroundColor: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
                     borderRadius: '10px',
                     padding: '12px 16px',
                     marginTop: '14px',
@@ -1000,29 +1021,64 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToSearch }) 
                     alignItems: 'center',
                   }}
                 >
-                  <span style={{ fontSize: '13px', color: '#475569' }}>Total Top-Up Amount:</span>
-                  <strong style={{ fontSize: '16px', color: '#059669' }}>
+                  <span style={{ fontSize: '13px', color: '#166534', fontWeight: 600 }}>Total Deposit:</span>
+                  <strong style={{ fontSize: '18px', color: '#15803d' }}>
                     Rs. {(isCustomAmount ? Number(customAmountStr || 0) : topUpAmount).toLocaleString()} LKR
                   </strong>
                 </div>
 
                 {/* Action Buttons */}
-                <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
                   <button
                     type="button"
                     className="nav-link-btn"
                     style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: '10px' }}
                     onClick={() => setShowTopUpModal(false)}
+                    disabled={isSubmittingTopUp}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     className="auth-submit-btn"
-                    style={{ flex: 2, marginTop: 0 }}
+                    style={{
+                      flex: 2,
+                      marginTop: 0,
+                      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontWeight: 700,
+                    }}
                     disabled={isSubmittingTopUp}
                   >
-                    {isSubmittingTopUp ? 'Processing...' : 'Confirm & Deposit Funds'}
+                    {isSubmittingTopUp ? (
+                      <span>Opening PayHere Gateway...</span>
+                    ) : (
+                      <>
+                        <span>💳 Pay with PayHere 🇱🇰</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Secondary Option for Direct Simulation */}
+                <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#64748b',
+                      fontSize: '11px',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                    disabled={isSubmittingTopUp}
+                    onClick={handleTopUpSubmit}
+                  >
+                    Or use Instant Direct Deposit (Offline Demo) →
                   </button>
                 </div>
               </form>

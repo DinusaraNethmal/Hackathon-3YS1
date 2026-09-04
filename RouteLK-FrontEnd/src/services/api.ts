@@ -386,3 +386,69 @@ export async function topUpWalletApi(
   return data;
 }
 
+export interface PayHerePaymentParams {
+  sandbox: boolean;
+  merchant_id: string;
+  return_url: string;
+  cancel_url: string;
+  notify_url: string;
+  order_id: string;
+  items: string;
+  amount: string;
+  currency: string;
+  hash: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  country: string;
+  custom_1?: string;
+  custom_2?: string;
+}
+
+export async function initPayHereTopUpApi(
+  amount: number,
+  token: string
+): Promise<{ success: boolean; data: PayHerePaymentParams }> {
+  const res = await fetch(`${API_BASE}/wallet/payhere-init`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ amount }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || 'Failed to initialize PayHere checkout.');
+  }
+  return data;
+}
+
+export async function confirmPayHereTopUpApi(
+  orderId: string,
+  token: string,
+  paymentId?: string
+): Promise<{
+  success: boolean;
+  message: string;
+  data: { balance: number; transaction: WalletTransaction };
+}> {
+  const res = await fetch(`${API_BASE}/wallet/payhere-confirm`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ orderId, paymentId }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || 'Failed to verify PayHere top-up.');
+  }
+  return data;
+}
+
+

@@ -37,10 +37,11 @@ const walletTransactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+      default: 0,
     },
     paymentMethod: {
       type: String,
-      enum: ['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'WALLET', 'OTHER'],
+      enum: ['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'WALLET', 'PAYHERE', 'OTHER'],
       default: 'CARD',
     },
     reference: {

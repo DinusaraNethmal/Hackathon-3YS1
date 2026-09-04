@@ -4,12 +4,18 @@ const {
   getWalletDetails,
   topUpWallet,
   payWithWallet,
+  initPayHereTopUp,
+  handlePayHereNotify,
+  confirmPayHereTopUp,
 } = require('../controllers/walletController');
 const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// All wallet routes require authentication
+// Public IPN webhook from PayHere payment gateway server
+router.post('/payhere-notify', handlePayHereNotify);
+
+// All passenger routes require JWT authentication
 router.use(protect);
 
 const topUpValidation = [
@@ -20,12 +26,16 @@ const topUpValidation = [
     .withMessage('Top-up amount must be between Rs. 100 and Rs. 50,000 LKR'),
   body('paymentMethod')
     .optional()
-    .isIn(['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'OTHER', 'card', 'lankapay', 'ezcash', 'genie'])
+    .isIn(['CARD', 'LANKAPAY', 'EZCASH', 'GENIE', 'PAYHERE', 'OTHER', 'card', 'lankapay', 'ezcash', 'genie', 'payhere'])
     .withMessage('Invalid payment method selected'),
 ];
 
 router.get('/', getWalletDetails);
 router.post('/topup', topUpValidation, topUpWallet);
 router.post('/pay', payWithWallet);
+
+// PayHere Integration Endpoints
+router.post('/payhere-init', initPayHereTopUp);
+router.post('/payhere-confirm', confirmPayHereTopUp);
 
 module.exports = router;
