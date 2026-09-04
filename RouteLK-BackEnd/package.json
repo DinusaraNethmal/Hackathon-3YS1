@@ -1,0 +1,43 @@
+{
+  "name": "routelk-backend",
+  "version": "1.0.0",
+  "description": "RouteLK Backend - Sri Lankan Public Bus Booking System API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "seed": "node seed/seedData.js",
+    "test": "node tests/bookingApi.test.js && node tests/walletApi.test.js",
+    "test:booking": "node tests/bookingApi.test.js",
+    "test:wallet": "node tests/walletApi.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Chamiya09/RouteLK-BackEnd.git"
+  },
+  "keywords": [
+    "routelk",
+    "bus-booking",
+    "express",
+    "mongodb",
+    "sri-lanka"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Chamiya09/RouteLK-BackEnd/issues"
+  },
+  "homepage": "https://github.com/Chamiya09/RouteLK-BackEnd#readme",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-validator": "^7.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.10.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
